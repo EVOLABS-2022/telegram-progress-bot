@@ -1,0 +1,26 @@
+{
+  "name": "telegram-progress-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot for client progress tracking",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": ["telegram", "bot", "progress", "tracking", "crm"],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "node-telegram-bot-api": "^0.66.0",
+    "googleapis": "^156.0.0",
+    "dotenv": "^16.6.1",
+    "date-fns": "^4.1.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
