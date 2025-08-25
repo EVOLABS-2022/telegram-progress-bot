@@ -5,6 +5,8 @@ const { jobsCommand, jobCommand, statusCommand } = require('./commands/jobs');
 const { invoicesCommand, invoiceCommand } = require('./commands/invoices');
 const { notificationsCommand } = require('./commands/notifications');
 const { NotificationManager } = require('./lib/notifications');
+const { handleCallback, showMainMenu } = require('./lib/callbackHandler');
+const { createMainMenu } = require('./lib/keyboards');
 
 // Bot setup
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -27,6 +29,11 @@ bot.on('error', (error) => {
 
 bot.on('polling_error', (error) => {
   console.error('Polling error:', error);
+});
+
+// Handle button callbacks
+bot.on('callback_query', (callbackQuery) => {
+  handleCallback(bot, callbackQuery);
 });
 
 // Welcome message and help
@@ -83,7 +90,7 @@ bot.onText(/\/help/, (msg) => {
 • \`/help\` - Show this help message
 • \`/start\` - Welcome message
 
-💡 **Tip:** You must authenticate first before using job and invoice commands.
+💡 **Tip:** After authentication, you can use the button interface for easier navigation!
   `;
   
   bot.sendMessage(msg.chat.id, helpMessage, { parse_mode: 'Markdown' });
@@ -105,13 +112,16 @@ bot.onText(/\/auth (.+)/, async (msg, match) => {
       // Auto-enable notifications for authenticated users
       notificationManager.subscribeUser(telegramId, result.client.id);
       
+      // Show main menu with buttons
+      const client = getAuthenticatedClient(telegramId);
+      const keyboard = createMainMenu(client.clientName);
+      
       await bot.sendMessage(msg.chat.id, 
-        `🔔 Notifications enabled! You'll receive updates when your job status changes.\n\n` +
-        `💡 Try these commands:\n` +
-        `• \`/jobs\` - View your jobs\n` +
-        `• \`/invoices\` - View your invoices\n` +
-        `• \`/status\` - Quick status overview`,
-        { parse_mode: 'Markdown' }
+        `🔔 Notifications enabled!\n\n📋 Welcome ${client.clientName}! What would you like to do?`,
+        { 
+          parse_mode: 'Markdown',
+          ...keyboard
+        }
       );
     } else {
       await bot.sendMessage(msg.chat.id, `❌ ${result.message}`, { parse_mode: 'Markdown' });
@@ -123,6 +133,29 @@ bot.onText(/\/auth (.+)/, async (msg, match) => {
       { parse_mode: 'Markdown' }
     );
   }
+});
+
+// Menu command for authenticated users
+bot.onText(/\/menu/, (msg) => {
+  const telegramId = msg.from.id;
+  const client = getAuthenticatedClient(telegramId);
+  
+  if (!client) {
+    bot.sendMessage(msg.chat.id, 
+      '🔐 You need to authenticate first. Send /auth followed by your unique auth code.\n\nExample: `/auth ABC123XYZ`',
+      { parse_mode: 'Markdown' }
+    );
+    return;
+  }
+  
+  const keyboard = createMainMenu(client.clientName);
+  bot.sendMessage(msg.chat.id, 
+    `📋 Welcome ${client.clientName}! What would you like to do?`,
+    { 
+      parse_mode: 'Markdown',
+      ...keyboard
+    }
+  );
 });
 
 // Logout command
