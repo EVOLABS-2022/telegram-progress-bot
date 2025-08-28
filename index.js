@@ -7,6 +7,14 @@ const { notificationsCommand } = require('./commands/notifications');
 const { NotificationManager } = require('./lib/notifications');
 const { handleCallback, showMainMenu } = require('./lib/callbackHandler');
 const { createMainMenu } = require('./lib/keyboards');
+const { 
+  startIntake, 
+  getIntakeSession, 
+  clearIntakeSession, 
+  getStepContent, 
+  processStepInput, 
+  processCallback 
+} = require('./lib/intake');
 
 // Bot setup
 const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -36,32 +44,31 @@ bot.on('callback_query', (callbackQuery) => {
   handleCallback(bot, callbackQuery);
 });
 
-// Welcome message and help
+// Welcome message and client type selection
 bot.onText(/\/start/, (msg) => {
   const welcomeMessage = `
 🤖 **Welcome to Progress Tracker Bot!**
 
 I help you track your project progress, view job status, check invoices, and get notifications about updates.
 
-**🔐 Getting Started:**
-First, authenticate with your unique auth code: \`/auth ABC123XYZ\`
-🔑 You should have received your auth code from us.
-
-**📋 Available Commands:**
-• \`/auth <code>\` - Authenticate with your unique auth code
-• \`/jobs\` - View your current jobs
-• \`/job <code>\` - Get details about a specific job
-• \`/status\` - Quick status overview
-• \`/invoices\` - View your invoices
-• \`/invoice <number>\` - Get invoice details and PDF
-• \`/notifications\` - Manage notification settings
-• \`/help\` - Show this help message
-• \`/logout\` - Sign out
-
-🚀 **Start by authenticating:** \`/auth ABC123XYZ\`
+**👋 Are you a new or existing client?**
   `;
   
-  bot.sendMessage(msg.chat.id, welcomeMessage, { parse_mode: 'Markdown' });
+  const keyboard = {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: '✨ New Client', callback_data: 'client_type_new' },
+          { text: '🔑 Existing Client', callback_data: 'client_type_existing' }
+        ]
+      ]
+    }
+  };
+  
+  bot.sendMessage(msg.chat.id, welcomeMessage, { 
+    parse_mode: 'Markdown',
+    ...keyboard
+  });
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -237,11 +244,81 @@ bot.onText(/\/notifications(.*)/, async (msg) => {
   }
 });
 
-// Handle unknown commands
+// Handle /skip command for intake form
+bot.onText(/\/skip/, (msg) => {
+  const userId = msg.from.id;
+  const session = getIntakeSession(userId);
+  
+  if (!session) return;
+  
+  // Process skip for current step
+  const result = processStepInput(session, '');
+  if (result.success) {
+    const content = getStepContent(session.step, session.data);
+    
+    if (session.messageId) {
+      bot.editMessageText(content.message, {
+        chat_id: msg.chat.id,
+        message_id: session.messageId,
+        parse_mode: 'Markdown',
+        ...content.keyboard
+      }).catch(() => {
+        // If edit fails, send new message
+        bot.sendMessage(msg.chat.id, content.message, {
+          parse_mode: 'Markdown',
+          ...content.keyboard
+        });
+      });
+    } else {
+      bot.sendMessage(msg.chat.id, content.message, {
+        parse_mode: 'Markdown',
+        ...content.keyboard
+      });
+    }
+  }
+});
+
+// Handle unknown commands and intake form text input
 bot.on('message', (msg) => {
   if (!msg.text || msg.text.startsWith('/')) return;
   
-  // For non-command messages, show help
+  const userId = msg.from.id;
+  const session = getIntakeSession(userId);
+  
+  // If user has active intake session, process their input
+  if (session) {
+    const result = processStepInput(session, msg.text);
+    
+    if (result.success) {
+      const content = getStepContent(session.step, session.data);
+      
+      if (session.messageId) {
+        bot.editMessageText(content.message, {
+          chat_id: msg.chat.id,
+          message_id: session.messageId,
+          parse_mode: 'Markdown',
+          ...content.keyboard
+        }).catch(() => {
+          // If edit fails, send new message
+          bot.sendMessage(msg.chat.id, content.message, {
+            parse_mode: 'Markdown',
+            ...content.keyboard
+          });
+        });
+      } else {
+        bot.sendMessage(msg.chat.id, content.message, {
+          parse_mode: 'Markdown',
+          ...content.keyboard
+        });
+      }
+    } else {
+      // Show error message
+      bot.sendMessage(msg.chat.id, `❌ ${result.error}`, { parse_mode: 'Markdown' });
+    }
+    return;
+  }
+  
+  // For non-command messages without active session, show help
   const helpText = `
 ❓ **I didn't understand that command.**
 
