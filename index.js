@@ -261,18 +261,26 @@ bot.onText(/\/skip/, (msg) => {
         chat_id: msg.chat.id,
         message_id: session.messageId,
         parse_mode: 'Markdown',
-        ...content.keyboard
-      }).catch(() => {
-        // If edit fails, send new message
-        bot.sendMessage(msg.chat.id, content.message, {
-          parse_mode: 'Markdown',
-          ...content.keyboard
-        });
+        reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+      }).catch((error) => {
+        console.error('Error updating message in skip handler:', error.message);
+        
+        // Only send new message if it's a critical error
+        if (error.code === 'ETELEGRAM' && error.response?.body?.error_code === 400) {
+          bot.sendMessage(msg.chat.id, content.message, {
+            parse_mode: 'Markdown',
+            reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+          }).then(sentMessage => {
+            session.messageId = sentMessage.message_id;
+          });
+        }
       });
     } else {
       bot.sendMessage(msg.chat.id, content.message, {
         parse_mode: 'Markdown',
-        ...content.keyboard
+        reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+      }).then(sentMessage => {
+        session.messageId = sentMessage.message_id;
       });
     }
   }
@@ -297,18 +305,26 @@ bot.on('message', (msg) => {
           chat_id: msg.chat.id,
           message_id: session.messageId,
           parse_mode: 'Markdown',
-          ...content.keyboard
-        }).catch(() => {
-          // If edit fails, send new message
-          bot.sendMessage(msg.chat.id, content.message, {
-            parse_mode: 'Markdown',
-            ...content.keyboard
-          });
+          reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+        }).catch((error) => {
+          console.error('Error updating message in text handler:', error.message);
+          
+          // Only send new message if it's a critical error
+          if (error.code === 'ETELEGRAM' && error.response?.body?.error_code === 400) {
+            bot.sendMessage(msg.chat.id, content.message, {
+              parse_mode: 'Markdown',
+              reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+            }).then(sentMessage => {
+              session.messageId = sentMessage.message_id;
+            });
+          }
         });
       } else {
         bot.sendMessage(msg.chat.id, content.message, {
           parse_mode: 'Markdown',
-          ...content.keyboard
+          reply_markup: content.keyboard ? content.keyboard.reply_markup : undefined
+        }).then(sentMessage => {
+          session.messageId = sentMessage.message_id;
         });
       }
     } else {
